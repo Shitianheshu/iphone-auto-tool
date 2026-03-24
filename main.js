@@ -287,6 +287,48 @@ async function unLockToSpreadsheet(rowNum, spreadsheetId, sheetName) {
   }
 }
 
+
+async function checkStockBySpreadsheet(itemNumber, place) {
+  const auth = new GoogleAuth({ 
+    keyFile:keyPath, 
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'] 
+  });
+  const client = await auth.getClient();
+  google.options({ auth: client });
+
+  const sheetName = 'iPhone15 Pro / Pro Max';
+  
+  try {
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: stockSpreadsheetId,
+      range: `${sheetName}!A:G`,
+    });
+
+    const rows = result.data.values;
+    if (!rows) return null;
+
+    const colIndex = {
+      R005: 4, // 名古屋 = E列
+      R224: 5, // 表参道 = F列
+    };
+
+    let availability = null;
+    if (colIndex[place] !== undefined) {
+      for (const row of rows) {
+        if (row[0] === itemNumber) {
+          availability = row[colIndex[place]];
+          break;
+        }
+      }
+    }
+
+    return availability;
+  } catch (error) {
+    console.error('Stock check error:', error);
+    return null;
+  }
+}
+
 // ======================= Browser =======================
 async function createBrowserSession(queueItem) {
   const sessionId = ++sessionCounter;
