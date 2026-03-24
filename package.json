@@ -4,7 +4,7 @@
   "description": "Optimized iPhone auto-purchase automation with advanced error handling and performance monitoring",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "cross-env SPEED_MODE=1 SPEED_FACTOR=0.02 DEBUG_SESSIONS=1 electron .",
     "dev": "electron . --dev",
     "build:all": "electron-builder -mwl",
     "build:mac": "electron-builder --mac",
