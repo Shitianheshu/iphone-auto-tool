@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>iPhone自動購入ツール</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <div class="header-ribbon">
+    <i class="fas fa-mobile-alt iphone-icon"></i>
+    <h1>iPhone自動購入ツール</h1>
+  </div>
+  <div class="form-container">
+    <div class="form-group">
+      <label class="label" for="item-url">購入ページURL:</label>
+      <input type="text" id="item-url" name="item-url" placeholder="購入ページのURLを入力"
+        value="https://www.apple.com/jp/shop/buy-iphone/iphone-16">
+    </div>
+    <div class="form-group" id="spreadsheet-common">
+      <label class="label" for="spreadsheet-id">Google スプレッドシートURL（共通）:</label>
+      <input type="text" id="spreadsheet-id" name="spreadsheet-id" value="https://docs.google.com/spreadsheets/d/edit?gid=0#gid=0" placeholder="Google SpreadsheetのURLを入力">
+    </div>
+    <div class="form-group">
+      <label class="label" for="pc-selection">PC選択:</label>
+      <select id="pc-selection" name="pc-selection">
+        <option value="1">PC 1</option>
+        <option value="2">PC 2</option>
+        <option value="3">PC 3</option>
+        <option value="4">PC 4</option>
+      </select>
+    </div>
+    <div class="form-group" id="spreadsheet-key-pc1">
+      <label class="label" for="spreadsheet-key">表計算キー (PC 1): <button id="help-button">?</button></label>
+      <input type="text" id="spreadsheet-key" name="spreadsheet-key" value="1vK6FqW8HXGpYux03jBRBVfyijz3cc-Ue1NVC54p8brs" placeholder="PC 1用のSpreadsheetキー">
+    </div>
+
+    <div class="form-group" id="spreadsheet-key-pc2" style="display: none;">
+      <label class="label" for="spreadsheet-key-2">表計算キー (PC 2):</label>
+      <input type="text" id="spreadsheet-key-2" name="spreadsheet-key-2" placeholder="PC 2用のSpreadsheetキー">
+    </div>
+
+    <div class="form-group" id="spreadsheet-key-pc3" style="display: none;">
+      <label class="label" for="spreadsheet-key-3">表計算キー (PC 3):</label>
+      <input type="text" id="spreadsheet-key-3" name="spreadsheet-key-3" placeholder="PC 3用のSpreadsheetキー">
+    </div>
+
+    <div class="form-group" id="spreadsheet-key-pc4" style="display: none;">
+      <label class="label" for="spreadsheet-key-4">表計算キー (PC 4):</label>
+      <input type="text" id="spreadsheet-key-4" name="spreadsheet-key-4" placeholder="PC 4用のSpreadsheetキー">
+    </div>
+
+    <hr>
+
+    <div class="form-group radio-group">
+      <label class="label">モデル:</label>
+      <label class="radio-inline"><input type="radio" name="model-option" value="0" checked>1</label>
+      <label class="radio-inline"><input type="radio" name="model-option" value="1">2</label>
+      <label class="radio-inline"><input type="radio" name="model-option" value="skip">スキップ</label>
+    </div>
+
+    <div class=" form-group radio-group">
+      <label class="label">カラー:</label>
+      <label class="radio-inline"><input type="radio" name="color-option" value="0" checked>1</label>
+      <label class="radio-inline"><input type="radio" name="color-option" value="1">2</label>
+      <label class="radio-inline"><input type="radio" name="color-option" value="2">3</label>
+      <label class="radio-inline"><input type="radio" name="color-option" value="3">4</label>
+    </div>
+
+    <div class="form-group radio-group">
+      <label class="label">ストレージ:</label>
+      <label class="radio-inline"><input type="radio" name="storage-option" value="0" checked>1</label>
+      <label class="radio-inline"><input type="radio" name="storage-option" value="1">2</label>
+      <label class="radio-inline"><input type="radio" name="storage-option" value="2">3</label>
+      <label class="radio-inline"><input type="radio" name="storage-option" value="3">4</label>
+    </div>
+
+    <div class="form-group radio-group">
+      <label class="label">注文個数: </label>
+      <label class="radio-inline"><input type="radio" name="quantity-option" value="1" checked>1</label>
+      <label class="radio-inline"><input type="radio" name="quantity-option" value="2">2</label>
+    </div>
+
+    <div class="form-group radio-group">
+      <label class="label">受け取り方法:</label>
+      <label class="radio-inline"><input type="radio" name="delivery-option" value="delivery" checked>郵送</label>
+      <label class="radio-inline"><input type="radio" name="delivery-option" value="convenienceStore">コンビニ</label>
+      <label class="radio-inline"><input type="radio" name="delivery-option" value="appleStore">Apple Store</label>
+    </div>
+
+    <div class="form-group radio-group">
+      <label class="label">対象ストア:</label>
+      <label class="radio-inline"><input type="radio" name="store-option" value="R005" checked>名古屋栄</label>
+      <label class="radio-inline"><input type="radio" name="store-option" value="R224">表参道</label>
+      <label class="radio-inline"><input type="radio" name="store-option" value="R119">渋谷</label>
+      <label class="radio-inline"><input type="radio" name="store-option" value="R718">丸の内</label>
+    </div>
+
+    <div class="form-group radio-group">
+      <label class="label"></label>
+      <label class="radio-inline"><input type="radio" name="store-option" value="R128">新宿</label>
+      <label class="radio-inline"><input type="radio" name="store-option" value="R710">川崎</label>
+      <label class="radio-inline"><input type="radio" name="store-option" value="R091">心斎橋</label>
+      <label class="radio-inline"><input type="radio" name="store-option" value="R711">京都</label>
+      <label class="radio-inline"><input type="radio" name="store-option" value="R079">銀座</label>
+
+    </div>
+
+    <div class="form-group radio-group">
+      <label class="label">支払い方法:</label>
+      <label class="radio-inline"><input type="radio" name="pay-option" value="creditcard" checked>クレカ</label>
+      <label class="radio-inline"><input type="radio" name="pay-option" value="bank">銀行振込</label>
+    </div>
+
+    <div class="form-group radio-group">
+      <label class="label">注文確定有効:</label>
+      <label class="radio-inline"><input type="radio" name="confirm-option" value="true" checked>有効</label>
+      <label class="radio-inline"><input type="radio" name="confirm-option" value="false" >無効</label>
+    </div>
+
+    <hr>
+
+    <button class="button" id="start-button">自動購入開始</button>
+    <button class="button" id="stop-button" disabled>処理停止</button>
+  </div>
+  <div id="sessions"></div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    const fieldIds = [
+      'item-url',
+      'max-timeout',
+      'spreadsheet-id',
+      'spreadsheet-key',
+      'spreadsheet-key-2',
+      'spreadsheet-key-3',
+      'spreadsheet-key-4',
+      'store-monitoring-interval',
+      'waiting-sec',
+    ];
+
+    const radioGroups = [
+      'login-type',
+      'model-option',
+      'color-option',
+      'storage-option',
+      'quantity-option',
+      'confirm-option',
+      'pay-option',
+      'delivery-option',
+      'store-option',
+      'pc-selection',
+    ];
+
+    const configMapping = {
+      'item-url': 'itemUrl',
+      'spreadsheet-id': 'spreadsheetId',
+      'pc-selection': 'pcSelection',
+      'spreadsheet-key': 'spreadsheetKey',
+      'spreadsheet-key-2': 'spreadsheetKey2',
+      'spreadsheet-key-3': 'spreadsheetKey3',
+      'spreadsheet-key-4': 'spreadsheetKey4',
+      'model-option': 'modelOption',
+      'color-option': 'colorOption',
+      'storage-option': 'storageOption',
+      'quantity-option': 'quantityOption',
+      'confirm-option': 'confirmOption',
+      'pay-option': 'payOption',
+      'delivery-option': 'deliveryOption',
+      'store-option': 'storeOption',
+      'store-monitoring-interval': 'storeMonitoringInterval',
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const packageJson = require('./package.json');
+      document.getElementById('version').textContent += packageJson.version;
+
+      // Set values for text and number fields
+      fieldIds.forEach(fieldId => {
+        const el = document.getElementById(fieldId);
+        if (el) {
+          el.value = localStorage.getItem(fieldId) || el.value;
+          el.addEventListener('change', event => {
+            localStorage.setItem(fieldId, event.target.value);
+          });
+        }
+      });
+
+      // Set values for radio buttons
+      radioGroups.forEach(group => {
+        const savedValue = localStorage.getItem(group);
+        if (savedValue) {
+          const el = document.querySelector(`input[name='${group}'][value='${savedValue}']`);
+          if (el) {
+            el.checked = true;
+          }
+        }
+        document.querySelectorAll(`input[name='${group}']`).forEach(button => {
+          button.addEventListener('change', function (event) {
+            if (this.checked) {
+              localStorage.setItem(group, event.target.value);
+            }
+          });
+        });
+      });
+
+      // Handle PC selection dropdown change
+      const pcSelection = document.getElementById('pc-selection');
+      if (pcSelection) {
+        // Set saved value
+        const savedPC = localStorage.getItem('pc-selection');
+        if (savedPC) {
+          pcSelection.value = savedPC;
+        }
+        
+        // Add change event listener
+        pcSelection.addEventListener('change', function() {
+          const selectedPC = this.value;
+          console.log('PC Selection changed to:', selectedPC);
+          localStorage.setItem('pc-selection', selectedPC);
+          
+          // Hide all key fields first
+          document.getElementById('spreadsheet-key-pc1').style.display = 'none';
+          document.getElementById('spreadsheet-key-pc2').style.display = 'none';
+          document.getElementById('spreadsheet-key-pc3').style.display = 'none';
+          document.getElementById('spreadsheet-key-pc4').style.display = 'none';
+          
+          if (selectedPC === 'all') {
+            // Show all spreadsheet key fields for "All View"
+            document.getElementById('spreadsheet-key-pc1').style.display = 'block';
+            document.getElementById('spreadsheet-key-pc2').style.display = 'block';
+            document.getElementById('spreadsheet-key-pc3').style.display = 'block';
+            document.getElementById('spreadsheet-key-pc4').style.display = 'block';
+            console.log('Showing all spreadsheet key fields for All View');
+          } else {
+            // Show only the selected PC's spreadsheet key field
+            const targetField = document.getElementById(`spreadsheet-key-pc${selectedPC}`);
+            if (targetField) {
+              targetField.style.display = 'block';
+              console.log(`Showing spreadsheet key field for PC ${selectedPC}`);
+            } else {
+              console.error(`Spreadsheet key field for PC ${selectedPC} not found`);
+            }
+          }
+        });
+        
+        // Trigger initial display
+        pcSelection.dispatchEvent(new Event('change'));
+      }
+    });
+
+    document.getElementById('start-button').addEventListener('click', (event) => {
+      const config = {};
+
+      // テキストと数値フィールドの値を取得
+      fieldIds.forEach(fieldId => {
+        const el = document.getElementById(fieldId);
+        if (el) {
+          config[configMapping[fieldId]] = el.value;
+        }
+      });
+
+      // ラジオボタンの値を取得
+      radioGroups.forEach(group => {
+        const el = document.querySelector(`input[name='${group}']:checked`);
+        if (el) {
+          config[configMapping[group]] = el.value;
+        }
+      });
+
+      ipcRenderer.send('start-scrape', config);
+
+      document.querySelectorAll('input').forEach(input => input.disabled = true);
+      event.target.disabled = true;
+      document.getElementById('stop-button').disabled = false;
+    });
+
+    document.getElementById('stop-button').addEventListener('click', (event) => {
+      ipcRenderer.send('stop-scrape');
+      document.querySelectorAll('input').forEach(input => input.disabled = false);
+      event.target.disabled = true;
+      document.getElementById('start-button').disabled = false;
+    });
+
+    document.getElementById('help-button').addEventListener('click', () => {
+      ipcRenderer.send('open-help-window');
+    });
+
+    function getCurrentTimestamp() {
+      const date = new Date();
+      date.setHours(date.getHours() + 9);
+      const localISOString = date.toISOString();
+      return localISOString.replace('Z', '+09:00');
+    }
+
+    ipcRenderer.on('status', (event, { sessionId, status }) => {
+      let sessionElement = document.getElementById(`session-${sessionId}`);
+      if (!sessionElement) {
+        sessionElement = document.createElement('div');
+        sessionElement.id = `session-${sessionId}`;
+        sessionElement.classList.add('session');
+        sessionElement.innerHTML = `
+            <div class="session-header" data-id="${sessionId}">Session ${sessionId}: ${status}</div>
+            <div class="session-log" id="session-log-${sessionId}" style="display:none;"></div>
+          `;
+
+        // Toggle log visibility when session header is clicked
+        sessionElement.querySelector('.session-header').addEventListener('click', function () {
+          const logElement = document.getElementById(`session-log-${sessionId}`);
+          logElement.style.display = logElement.style.display === 'none' ? 'block' : 'none';
+        });
+
+        document.getElementById('sessions').appendChild(sessionElement);
+      } else {
+        const headerElement = sessionElement.querySelector('.session-header');
+        headerElement.textContent = `Session ${sessionId}: ${status}`;
+      }
+    });
+
+    ipcRenderer.on('log', (event, { sessionId, message }) => {
+      const logElement = document.getElementById(`session-log-${sessionId}`);
+      const timestamp = getCurrentTimestamp();
+      if (logElement) {
+        logElement.innerHTML += `<p>(${timestamp}) : ${message}</p>`;
+      }
+    });
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Google Spreadsheetとの連携方法</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      padding: 20px;
+      border: 1px solid #ccc;
+    }
+
+    h1 {
+      color: #333;
+    }
+
+    ol {
+      margin-bottom: 20px;
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>Google Spreadsheetとの連携方法</h1>
+
+  <p><a href="https://virment.com/enable-google-spreadsheet-api/"
+      target="_blank">https://virment.com/enable-google-spreadsheet-api</a>で書かれている内容とほぼ同じです。こちらをまず参考にしてください。</p>
+
+  <hr>
+
+  <h3>スプレッドシートIDの取得</h3>
+  <p>Googleスプレッドシートを開き、URLから「https://docs.google.com/spreadsheets/d/xxxxxxx/edit」の「d」と「edit」の間にある文字列がスプレッドシートIDです。
+  </p>
+
+  <hr>
+
+  <h3>スプレッドシートキーの取得と設定</h3>
+  <ol>
+    <li>
+      <strong>キーの取得Sheets APIの有効化</strong>
+      <p>Google Cloud
+        Console(https://console.cloud.google.com/)にログインして、プロジェクトを選び、左側のナビゲーションバーからAPIとサービス >
+        ダッシュボードに進みます。その後、`APIとサービスを有効にする`をクリックし、Sheets
+        APIを検索して有効にします。</p>
+    </li>
+
+    <li>
+      <strong>サービスアカウントの作成</strong>
+      <p>Google Cloud Consoleで、左側のナビゲーションバーから`IAMと管理 > サービスアカウント`に進み、サービスアカウントを作成します。</p>
+    </li>
+
+    <li>
+      <strong>JSON鍵の作成とダウンロード</strong>
+      <p>作成したサービスアカウントの詳細画面で、`鍵を追加`ボタンをクリックしてJSONフォーマットの鍵を生成し、ダウンロードします。</p>
+    </li>
+
+    <li>
+      <strong>フォームにJSON鍵の内容のテキストをそのままコピーする</strong>
+      <p>ダウンロードしたJSONファイルをテキストエディタで開き、その内容をフォームにコピー＆ペーストします。</p>
+    </li>
+
+    <li>
+      <strong>シートの共有にサービスアカウントを追加</strong>
+      <p>対象のGoogleスプレッドシートを開き、右上の`共有`ボタンをクリック。サービスアカウントのメールアドレスを共有設定に追加します。</p>
+    </li>
+
+    <li>
+      <strong>完了</strong>
+    </li>
+  </ol>
+
+</body>
+
+</html>
