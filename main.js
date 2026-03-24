@@ -188,7 +188,7 @@ async function initializeQueue() {
   for (const t of targets) {
     const rows = await getRowsFromSpreadsheet(t.id, t.tab);
     for (const r of rows) {
-      if (!r.status || r.status === 'pending') {
+      if (!r.status || r.status === '') {
         pendingRowsQueue.push({
           spreadsheetId: t.id,
           sheetName: t.tab,
@@ -278,7 +278,7 @@ async function unLockToSpreadsheet(rowNum, spreadsheetId, sheetName) {
       spreadsheetId: spreadsheetId,
       range: `${sheetName}!M${rowNum}:N${rowNum}`,
       valueInputOption: 'USER_ENTERED',
-      resource: { values: [['', 'pending']] },
+      resource: { values: [['', '']] },
     });
     mainWindow.webContents.send('log', { sessionId: 'main', message: `[Sheets] Row ${rowNum} unlocked` });
   } catch (error) {
