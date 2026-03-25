@@ -45,7 +45,7 @@ let sheets = google.sheets('v4');
 
 let url = 'https://www.apple.com/jp/shop/buy-iphone/';
 let pcSelection = '1';
-let modelOption, colorOption, storageOption, quantityOption;
+let modelOption, colorOption, storageOption, quantityOption, zipOption;
 let confirmOption, payOption, deliveryOption, storeOption;
 let storeMonitoringInterval, workerId;
 let spreadsheetKey1, spreadsheetKey2, spreadsheetKey3, spreadsheetKey4;
@@ -88,7 +88,7 @@ function startApiServer() {
 
   const API_KEY = "578d28153ca5fc4f7b20c1e4df7c51f87638627b3261165ed8a9803129d85d97";
 
-   server.use(
+  server.use(
     cors({
       origin: '*',
       methods: ['GET', 'POST', 'OPTIONS'],
@@ -101,12 +101,10 @@ function startApiServer() {
 
   server.post('/start', async (req, res) => {
     try {
-      if (runningStatus) {
-        return res.json({ success: false, message: "Already running" });
-      }
+      
 
       const args = req.body;
-            console.log(args, 'ref');
+      
 
       runningStatus = true;
 
@@ -114,6 +112,7 @@ function startApiServer() {
       pcSelection = args.pcSelection || '1';
       modelOption = args.modelOption;
       colorOption = args.colorOption;
+      zipOption = args.zipCode;
       storageOption = args.storageOption;
       quantityOption = args.quantityOption;
       confirmOption = args.confirmOption;
@@ -158,10 +157,10 @@ function startApiServer() {
         s.status === 'running'
           ? '実行中'
           : s.status === 'completed'
-          ? '完了'
-          : s.status === 'error'
-          ? 'エラー'
-          : '待機中',
+            ? '完了'
+            : s.status === 'error'
+              ? 'エラー'
+              : '待機中',
       stepLabelJa: s.step ? STEP_LABELS_JA[s.step] || '' : '',
     }));
 
@@ -179,7 +178,7 @@ function startApiServer() {
 }
 
 // ======================= Queue =======================
-function safeStr(v){ return v ? String(v) : '' }
+function safeStr(v) { return v ? String(v) : '' }
 
 async function initializeQueue() {
   pendingRowsQueue = [];
@@ -223,9 +222,9 @@ async function processQueue() {
 
 // ======================= スプレッドシート操作関数 =======================
 async function lockAndMarkDoneInSpreadsheet(rowNum, spreadsheetId, sheetName, orderNumber = '') {
-  const auth = new GoogleAuth({ 
-    keyFile: keyPath, 
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'] 
+  const auth = new GoogleAuth({
+    keyFile: keyPath,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets']
   });
 
   const client = await auth.getClient();
@@ -266,9 +265,9 @@ async function lockAndMarkDoneInSpreadsheet(rowNum, spreadsheetId, sheetName, or
 }
 
 async function unLockToSpreadsheet(rowNum, spreadsheetId, sheetName) {
-  const auth = new GoogleAuth({ 
-    keyFile:keyPath, 
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'] 
+  const auth = new GoogleAuth({
+    keyFile: keyPath,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets']
   });
   const client = await auth.getClient();
   google.options({ auth: client });
@@ -289,15 +288,15 @@ async function unLockToSpreadsheet(rowNum, spreadsheetId, sheetName) {
 
 
 async function checkStockBySpreadsheet(itemNumber, place) {
-  const auth = new GoogleAuth({ 
-    keyFile:keyPath, 
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'] 
+  const auth = new GoogleAuth({
+    keyFile: keyPath,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets']
   });
   const client = await auth.getClient();
   google.options({ auth: client });
 
   const sheetName = 'iPhone15 Pro / Pro Max';
-  
+
   try {
     const result = await sheets.spreadsheets.values.get({
       spreadsheetId: stockSpreadsheetId,
@@ -333,13 +332,13 @@ async function checkStockBySpreadsheet(itemNumber, place) {
 async function createBrowserSession(queueItem) {
   const sessionId = ++sessionCounter;
   const browser = await pie.connect(app, puppeteer);
-  
+
   const browserWindow = new BrowserWindow({
     width: 900,
     height: 700,
     title: `セッション ${sessionId} - ${queueItem.rowData.firstName || 'Unknown'}`,
     icon: './title.png',
-   
+
     webPreferences: {
       partition: `セッション-${sessionId}-${Date.now()}`,
       nodeIntegration: true,
@@ -353,9 +352,9 @@ async function createBrowserSession(queueItem) {
       document.documentElement.classList.add('セッション-${sessionId}');
     `);
   });
-  
+
   const sessionPage = await pie.getPage(browser, browserWindow);
-  console.log(sessionId,queueItem, 'log')
+  console.log(sessionId, queueItem, 'log')
   activeSessions.set(sessionId, {
     window: browserWindow,
     page: sessionPage,
@@ -407,7 +406,7 @@ async function getRowsFromSpreadsheet(id, tab) {
   });
 }
 
-function safeStr(v){ return v ? String(v) : '' }
+function safeStr(v) { return v ? String(v) : '' }
 function findRowUrl(rowData) {
   if (!rowData) return '';
   const candidates = new Set(['itemUrl', 'url', 'pageUrl', 'itemPageUrl'].map(s => s.toLowerCase()));
@@ -453,17 +452,17 @@ async function lockRow(id, tab, row) {
 
 // ======================= Scraper =======================
 async function scrapeWebsite(sessionId, targetWindow, data) {
-   
-  const sessionInfo= activeSessions.get(sessionId);
+
+  const sessionInfo = activeSessions.get(sessionId);
   // 入力用の安全な文字列化ヘルパー
- 
+
   if (!sessionInfo) {
     if (targetWindow && !targetWindow.isDestroyed()) {
       targetWindow.close();
     }
     return;
   }
-  
+
   const currentSpreadsheetId = sessionInfo.spreadsheetId;
   const currentSheetName = sessionInfo.sheetName;
   const spreadsheetInfo = sessionInfo.rowData;
@@ -473,8 +472,8 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
       safeStr(findRowUrl(data)) || url,
       safeStr(findRowIphoneId(data)),
     );
-   console.log(sessionUrl, 'SessionUrl')
-  
+  console.log(sessionUrl, 'SessionUrl')
+
 
   try {
     mainWindow.webContents.send('status', { sessionId, status: '実行中...' });
@@ -492,13 +491,13 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
     const page = activeSessions.get(sessionId).page;
     page.setDefaultTimeout(120000);
     page.setDefaultNavigationTimeout(120000);
-    
+
     const client = await page.target().createCDPSession();
     await client.send('Runtime.enable');
     await client.send('Runtime.setAsyncCallStackDepth', { maxDepth: 32 });
 
     // Apple公式サイトに遷移
-    await page.goto(sessionUrl , { waitUntil: 'domcontentloaded' });
+    await page.goto(sessionUrl, { waitUntil: 'domcontentloaded' });
     mainWindow.webContents.send('log', { sessionId, message: `Navigated to ${sessionUrl}` });
 
     updateSessionState(sessionId, {
@@ -507,7 +506,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
       messageJa: 'モデルを選択中',
     });
     await page.waitForTimeout(500);
-   
+
     // ======================= 商品選択処理 =======================
     const maxRetries = 3;
     for (let i = 0; i < maxRetries; i++) {
@@ -551,7 +550,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
 
 
       // Apple Store在庫監視モード
-      if (deliveryOption == 'appleStore' && i == 0) {
+      if (deliveryOption == 'appleStore1' && i == 0) {
         await page.setRequestInterception(true);
         let targetUrl;
         let itemNumber;
@@ -596,71 +595,111 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
 
         page.off('request', interceptedRequestHandler);
         await page.setRequestInterception(false);
-        await page.goto(sessionUrl, { waitUntil: 'networkidle0'});
+        await page.goto(sessionUrl, { waitUntil: 'networkidle0' });
       } else {
         await page.waitForSelector('#noTradeIn');
         await directClick(capacitySelector, Number(storageOption), sessionId, page);
       }
-
+      const isAppleCareSelected = async (selector) => {
+        try {
+          return await page.$eval(selector, el => el.checked);
+        } catch (e) {
+          return false; // 要素がまだない場合は未選択扱い
+        }
+      };
+      const isExist = async (selector) => {
+        try {
+          const el = await page.$(selector);
+          return el !== null;
+        } catch (e) {
+          return false;
+        }
+      };
       updateSessionState(sessionId, {
         progress: 35,
         step: 'select_storage',
         messageJa: 'ストレージ容量を選択中',
       });
       const noTradeInSelector = '#noTradeIn';
+      await page.waitForSelector(noTradeInSelector, { visible: true });
       await waitForClickableElement(noTradeInSelector, sessionId);
-      await page.waitForTimeout(300);
-      await page.waitForSelector('[value="UNLOCKED_JP"]', { visible: true});
       await directClick(noTradeInSelector, 0, sessionId, page);
-      await page.waitForTimeout(1000);
+
+      // Select carrier model (Unlocked JP)
       const carrierModelSelector = '[value="UNLOCKED_JP"]';
+      await page.waitForSelector(carrierModelSelector, { visible: true });
       await waitForClickableElement(carrierModelSelector, sessionId);
-      await page.waitForTimeout(300);
-      await page.waitForSelector('[value="fullprice"]', { visible: true});
       await directClick(carrierModelSelector, 0, sessionId, page);
 
+      // Wait for next step (full price option to appear)
       const purchaseInSelector = '[value="fullprice"]';
+      await page.waitForSelector(purchaseInSelector, { visible: true });
       await waitForClickableElement(purchaseInSelector, sessionId);
-      await page.waitForTimeout(300);
-      await page.waitForSelector('[data-autom="noapplecare"]', { visible: true});
       await directClick(purchaseInSelector, 0, sessionId, page);
-      await page.waitForTimeout(1000);
 
-      await page.waitForTimeout(300);
       const applecareSelector = '[data-autom="noapplecare"]';
-      await waitForClickableElement(applecareSelector, sessionId);
-      await page.waitForTimeout(300);
-      await page.waitForSelector('[name="add-to-cart"]', { visible: true});
-      await directClick(applecareSelector, 0, sessionId, page);
-
       const addToCartSelector = '[name="add-to-cart"]';
-      await waitForClickableElement(addToCartSelector, sessionId);
-      await page.waitForTimeout(300);
-      await directClick(addToCartSelector, 0, sessionId, page);
+      const successSelector = '.rc-summaryheader-button button'; // 次の画面の要素
+      const MAX_RETRY = 3;
+
+      for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+        console.log(`Attempt ${attempt}`);
+        await ensureAppleCareOff(page, applecareSelector, sessionId);
+        await ensureAppleCareOff(page, applecareSelector, sessionId);
+        await Promise.all([
+          page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => { }),
+          (async () => {
+            await page.waitForSelector(addToCartSelector, { visible: true });
+            await waitForClickableElement(addToCartSelector, sessionId);
+            await directClick(addToCartSelector, 0, sessionId, page);
+          })()
+        ]);
+        try {
+          await page.waitForSelector(successSelector, { timeout: 5000 });
+          console.log('真の成功（次のステップへ移行）');
+          break;
+
+        } catch (e) {
+          console.log(' Not on next page, checking AppleCare state...');
+          const stillExists = await page.$(applecareSelector);
+
+          if (stillExists) {
+            const isChecked = await page.$eval(applecareSelector, el => el.checked);
+
+            if (!isChecked) {
+              console.log('❌ AppleCare reset detected → retry');
+              continue;
+            }
+          }
+          console.log(' Unknown state → retry');
+        }
+      }
 
       updateSessionState(sessionId, {
         progress: 50,
         step: 'add_to_cart',
         messageJa: 'カートに追加中',
       });
+      await page.waitForTimeout(300);
+
 
       const goToBagSelector = '.rc-summaryheader-button button';
+      await page.waitForTimeout(goToBagSelector, { visible: true });
       await waitForClickableElement(goToBagSelector, sessionId);
-      await page.waitForTimeout(300);
       await directClick(goToBagSelector, 0, sessionId, page);
 
       const quantitySelector = '.rs-quantity-dropdown';
       try {
-        await page.waitForSelector(quantitySelector);
-        page.waitForTimeout(300);
+        await page.waitForTimeout(quantitySelector, { visible: true });
+        await waitForClickableElement(quantitySelector, sessionId);
         await page.select(quantitySelector, quantityOption);
       } catch (error) {
         console.log(`数量変更失敗: ${error}`);
       }
 
       const goToCheckoutSelector = '[id="shoppingCart.actions.navCheckoutOtherPayments"]';
+      await page.waitForTimeout(goToBagSelector, { visible: true });
       await waitForClickableElement(goToCheckoutSelector, sessionId);
-      await page.waitForTimeout(300);
       await directClick(goToCheckoutSelector, 0, sessionId, page);
 
       updateSessionState(sessionId, {
@@ -671,27 +710,26 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
 
       // ログイン処理
       const guestLoginSelector = '[id="signIn.guestLogin.guestLogin"]';
+      await page.waitForTimeout(guestLoginSelector, { visible: true });
       await waitForClickableElement(guestLoginSelector, sessionId);
-      await page.waitForTimeout(300);
       await directClick(guestLoginSelector, 0, sessionId, page);
 
-      await page.waitForTimeout(2000);
-      
       // ======================= 配送 or 店舗受取 =======================
       if (deliveryOption == 'delivery') {
         const locationEditSelector = '.rs-edit-location-button';
         await waitForClickableElement(locationEditSelector, sessionId);
         await page.waitForTimeout(300);
         await directClick(locationEditSelector, 0, sessionId, page);
-        const postalSelector='[id="checkout.fulfillment.deliveryTab.delivery.deliveryLocation.address.deliveryWarmingSubLayout.postalCode"]';
+
+        const postalSelector = '[id="checkout.fulfillment.deliveryTab.delivery.deliveryLocation.address.deliveryWarmingSubLayout.postalCode"]';
         await page.waitForSelector(postalSelector, { timeout: 10000 });
         await page.$eval(postalSelector, el => el.value = '');
         await page.type(postalSelector, safeStr(spreadsheetInfo?.postalCode));
-        
+
         await page.$eval('[id="checkout.fulfillment.deliveryTab.delivery.deliveryLocation.address.deliveryWarmingSubLayout.postalCode"]', el => el.value = '');
         await page.type('[id="checkout.fulfillment.deliveryTab.delivery.deliveryLocation.address.deliveryWarmingSubLayout.postalCode"]', safeStr(spreadsheetInfo?.postalCode));
         await page.select('[id="checkout.fulfillment.deliveryTab.delivery.deliveryLocation.address.deliveryWarmingSubLayout.state"]', safeStr(spreadsheetInfo?.state));
-        
+
         await page.waitForTimeout(2000);
         const deliverySelector = '#rs-checkout-continue-button-bottom';
         await waitForClickableElement(deliverySelector, sessionId);
@@ -717,22 +755,27 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
         await page.type('[id="checkout.shipping.addressContactPhone.address.mobilePhone"]', safeStr(spreadsheetInfo?.mobilePhone));
 
       } else if (deliveryOption == 'convenienceStore' || deliveryOption == 'appleStore') {
-        const convenienceStoreSelector = '[for="fulfillmentOptionButtonGroup1"]';
+        const convenienceStoreSelector = '.rc-segmented-control-item:nth-child(2) .rc-segmented-control-button';
+        await page.waitForTimeout(convenienceStoreSelector, { visible: true });
         await waitForClickableElement(convenienceStoreSelector, sessionId);
         await directClick(convenienceStoreSelector, 0, sessionId, page);
+        await page.waitForTimeout(1000);
 
-        try {
-          const locationEditSelector = '.rs-edit-location-button';
-          await page.waitForSelector(locationEditSelector, { timeout: 3000 });
-          await directClick(locationEditSelector, 0, sessionId, page);
-        } catch { }
+        const locationEditSelector = '.rs-edit-location-button';
+        await waitForClickableElement(locationEditSelector, sessionId);
+        await page.waitForTimeout(300);
+        await directClick(locationEditSelector, 0, sessionId, page);
 
         const storeLocatorSearchInputSelector = '[id="checkout.fulfillment.pickupTab.pickup.storeLocator.searchInput"]';
-        await page.waitForSelector(storeLocatorSearchInputSelector);
+        await page.waitForTimeout(storeLocatorSearchInputSelector, { visible: true });
+        await waitForClickableElement(storeLocatorSearchInputSelector, sessionId);
+        await page.waitForTimeout(300);
+
         await page.$eval(storeLocatorSearchInputSelector, el => el.value = '');
-        await page.type(storeLocatorSearchInputSelector, safeStr(spreadsheetInfo?.postalCode));
+        await page.type(storeLocatorSearchInputSelector, safeStr(zipOption));
 
         const locationEditButtonSelector = '[id="checkout.fulfillment.pickupTab.pickup.storeLocator.search"]';
+        await page.waitForTimeout(locationEditButtonSelector, { visible: true });
         await waitForClickableElement(locationEditButtonSelector, sessionId);
         await directClick(locationEditButtonSelector, 0, sessionId, page);
 
@@ -775,7 +818,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
 
       if (payOption == 'creditcard') {
         const creditSelector = '[id="checkout.billing.billingoptions.credit"]';
-        const cardNumber=spreadsheetInfo?.cardNumber;
+        const cardNumber = spreadsheetInfo?.cardNumber;
         await waitForClickableElement(creditSelector, sessionId);
         await page.waitForTimeout(300);
         await directClick(creditSelector, 0, sessionId, page);
@@ -860,7 +903,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
   } catch (error) {
     mainWindow.webContents.send('status', { sessionId, status: '失敗' });
     mainWindow.webContents.send('log', { sessionId, message: `Error: ${error.message}` });
-    
+
     // エラー時は行をアンロック
     try {
       await unLockToSpreadsheet(rowNum, currentSpreadsheetId, currentSheetName);
@@ -881,13 +924,29 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
     if (targetWindow && !targetWindow.isDestroyed()) {
       targetWindow.close();
     }
-    
+
     // 次の処理を開始
     setTimeout(processQueue, 2000);
   }
 }
 
+async function ensureAppleCareOff(page, selector, sessionId) {
+  await page.waitForSelector(selector, { visible: true });
 
+  const isChecked = await page.$eval(selector, el => el.checked);
+
+  if (!isChecked) {
+    await waitForClickableElement(selector, sessionId);
+    await directClick(selector, 0, sessionId, page);
+
+    // 状態が反映されるまで待つ
+    await page.waitForFunction(
+      sel => document.querySelector(sel)?.checked === true,
+      {},
+      selector
+    );
+  }
+}
 
 // ======================= ユーティリティ関数 =======================
 
@@ -933,7 +992,7 @@ async function waitForClickableElement(selector, sessionId, pageOrFrame = null, 
   await page.waitForTimeout(300); // give JS time to attach listeners
 }
 async function safePageEvaluate(fn, ...args) {
-  const page =activeSessions.get(args[2]).page
+  const page = activeSessions.get(args[2]).page
 
   const maxRetries = 3;
   for (let i = 0; i < maxRetries; i++) {
