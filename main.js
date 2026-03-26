@@ -1019,7 +1019,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
         const postalSelector = '[id="checkout.fulfillment.deliveryTab.delivery.deliveryLocation.address.deliveryWarmingSubLayout.postalCode"]';
         await page.waitForSelector(postalSelector, { timeout: 10000 });
         await page.$eval(postalSelector, el => el.value = '');
-        await page.type(postalSelector, safeStr(spreadsheetInfo?.postalCode));
+        await page.type(postalSelector, spreadsheetInfo?.postalCode);
 
         await page.$eval('[id="checkout.fulfillment.deliveryTab.delivery.deliveryLocation.address.deliveryWarmingSubLayout.postalCode"]', el => el.value = '');
         await page.type('[id="checkout.fulfillment.deliveryTab.delivery.deliveryLocation.address.deliveryWarmingSubLayout.postalCode"]', safeStr(spreadsheetInfo?.postalCode));
@@ -1067,8 +1067,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
 
         await page.waitForSelector(storeLocatorSearchInputSelector, { timeout: 10000 });
         await page.$eval(storeLocatorSearchInputSelector, el => el.value = '');
-        console.log(safeStr(effectiveZipOption), 'zip code');
-        await page.type(storeLocatorSearchInputSelector, safeStr(effectiveZipOption));
+        await page.type(storeLocatorSearchInputSelector, effectiveZipOption);
 
         const locationEditButtonSelector = '[id="checkout.fulfillment.pickupTab.pickup.storeLocator.search"]';
         await page.waitForTimeout(locationEditButtonSelector, { visible: true });
