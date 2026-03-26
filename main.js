@@ -55,6 +55,27 @@ const stockSpreadsheetId = '1tY-3_3ClN26w_Z0AYRmUofgQ0rarJsh8epxPAuPw0D0';
 // ======================= セッション状態（モバイル監視用） =======================
 const sessionStates = new Map();
 
+function sanitizeProxyEnv() {
+  // gaxios/https-proxy-agent will create a proxy agent from proxy env vars.
+  // If the proxy value is malformed, requests fail with ERR_INVALID_URL.
+  const keys = ['HTTP_PROXY', 'http_proxy', 'HTTPS_PROXY', 'https_proxy', 'ALL_PROXY', 'all_proxy'];
+  for (const k of keys) {
+    const v = process.env[k];
+    if (!v) continue;
+    const trimmed = String(v).trim();
+    if (!trimmed) continue;
+    try {
+      // Supports full URLs like http://host:port
+      // eslint-disable-next-line no-new
+      new URL(trimmed);
+    } catch {
+      // eslint-disable-next-line no-console
+      console.warn(`[proxy] invalid env ${k}="${trimmed.slice(0, 60)}" -> unsetting`);
+      delete process.env[k];
+    }
+  }
+}
+
 const STEP_LABELS_JA = {
   navigation_started: 'Apple公式サイトにアクセス中',
   select_model: 'モデルを選択中',
@@ -80,9 +101,128 @@ function updateSessionState(sessionId, patch) {
   sessionStates.set(sessionId, next);
 }
 
+function normalizeHeaderKey(input) {
+  return String(input ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[_-]+/g, '');
+}
+
+function validateSpreadsheetKey(input) {
+  const raw = String(input ?? '').trim();
+  // Google Sheets key is typically 20-30 chars with [a-zA-Z0-9-_]
+  if (!raw) return '';
+  return /^[a-zA-Z0-9-_]{10,}$/.test(raw) ? raw : '';
+}
+
+function mapRowToHeaderOrder(headers, row) {
+  const normalizedToHeader = new Map();
+  headers.forEach((h) => normalizedToHeader.set(normalizeHeaderKey(h), h));
+
+  const rowNormalizedEntries = Object.entries(row ?? {}).map(([k, v]) => [
+    normalizeHeaderKey(k),
+    v,
+  ]);
+
+  const normalizedToValue = new Map(rowNormalizedEntries);
+
+  // Allow friendly aliases coming from frontend
+  const aliases = new Map([
+    [normalizeHeaderKey('appleid'), normalizeHeaderKey('Apple ID')],
+    [normalizeHeaderKey('applepassword'), normalizeHeaderKey('Password')],
+    [normalizeHeaderKey('iphone_id'), normalizeHeaderKey('iphone_id')],
+  ]);
+
+  const values = headers.map((h) => {
+    const keyNorm = normalizeHeaderKey(h);
+    const aliasNorm = aliases.get(keyNorm);
+    const v =
+      normalizedToValue.has(keyNorm)
+        ? normalizedToValue.get(keyNorm)
+        : aliasNorm && normalizedToValue.has(aliasNorm)
+          ? normalizedToValue.get(aliasNorm)
+          : '';
+    return v === undefined || v === null ? '' : String(v);
+  });
+
+  return values;
+}
+
+function parseUpdatedRangeToRowNums(updatedRange, rowsLength) {
+  if (!updatedRange || typeof updatedRange !== 'string') return [];
+  // Example: "list!A10:Z12"
+  const m = updatedRange.match(/!A(\d+):[A-Z]+(\d+)/);
+  if (m) {
+    const start = Number(m[1]);
+    const end = Number(m[2]);
+    if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
+      const len = end - start + 1;
+      if (rowsLength && len !== rowsLength) {
+        // still return based on range; mismatch usually means sheet changed concurrently
+      }
+      return Array.from({ length: len }, (_, i) => start + i);
+    }
+  }
+  return [];
+}
+
+async function appendRowsToSpreadsheet({ spreadsheetId, sheetName, rows }) {
+  // Ensure this request isn't affected by malformed proxy env vars.
+  // sanitizeProxyEnv();
+  const normalizedSpreadsheetId = validateSpreadsheetKey(spreadsheetId);
+  if (!normalizedSpreadsheetId) {
+    throw new Error(
+      `spreadsheetId is invalid. Received: ${String(spreadsheetId).slice(0, 60)}`,
+    );
+  }
+  if (!sheetName) throw new Error('sheetName is required');
+  if (!Array.isArray(rows) || rows.length === 0) throw new Error('rows must be a non-empty array');
+
+  const auth = new GoogleAuth({
+    keyFile: keyPath,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets']
+  });
+
+  const client = await auth.getClient();
+  google.options({ auth: client });
+
+  console.log('appendRows spreadsheetId', {
+    received: String(spreadsheetId).slice(0, 80),
+    normalized: normalizedSpreadsheetId,
+    sheetName,
+  });
+  const headerRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: normalizedSpreadsheetId,
+    range: `${sheetName}!1:1`,
+  });
+  const headers = (headerRes.data.values?.[0] ?? []).filter(Boolean);
+  if (!headers.length) throw new Error(`No headers found in sheet: ${sheetName}`);
+  console.log('sheetinfo3', rows)
+  const values = rows.map((r) => mapRowToHeaderOrder(headers, r));
+
+  const appendRes = await sheets.spreadsheets.values.append({
+    spreadsheetId: normalizedSpreadsheetId,
+    range: `${sheetName}!A:AA`,
+    valueInputOption: 'USER_ENTERED',
+    insertDataOption: 'INSERT_ROWS',
+    resource: { values },
+  });
+
+  const updatedRange = appendRes.data.updates?.updatedRange ?? null;
+  const appendedRowNums = parseUpdatedRangeToRowNums(updatedRange, rows.length);
+
+  return {
+    updatedRange,
+    appendedRowNums,
+    updatedRows: appendRes.data.updates?.updatedRows ?? values.length,
+  };
+}
+
 // ======================= 🔥 API SERVER =======================
 function startApiServer() {
   const server = express();
+  // sanitizeProxyEnv();
   server.options('*', cors());
   server.use(express.json());
 
@@ -122,10 +262,10 @@ function startApiServer() {
       storeMonitoringInterval = Math.max(args.storeMonitoringInterval || 5, 5);
       workerId = args.workerId || 'api';
 
-      spreadsheetKey1 = args.spreadsheetKey;
-      spreadsheetKey2 = args.spreadsheetKey2;
-      spreadsheetKey3 = args.spreadsheetKey3;
-      spreadsheetKey4 = args.spreadsheetKey4;
+      spreadsheetKey1 = validateSpreadsheetKey(args.spreadsheetKey);
+      spreadsheetKey2 = validateSpreadsheetKey(args.spreadsheetKey2);
+      spreadsheetKey3 = validateSpreadsheetKey(args.spreadsheetKey3);
+      spreadsheetKey4 = validateSpreadsheetKey(args.spreadsheetKey4);
 
       await initializeQueue();
       processQueue();
@@ -135,6 +275,126 @@ function startApiServer() {
     } catch (err) {
       runningStatus = false;
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  server.post('/appendRows', async (req, res) => {
+    try {
+      const { spreadsheetId, sheetName = 'list', rows } = req.body ?? {};
+      const result = await appendRowsToSpreadsheet({
+        spreadsheetId: validateSpreadsheetKey(spreadsheetId),
+        sheetName,
+        rows,
+      });
+      res.json({ success: true, ...result });
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: err?.message || String(err),
+        // For debugging only: avoid huge stack in UI logs
+        debug: err?.stack ? String(err.stack).slice(0, 500) : undefined,
+      });
+    }
+  });
+
+  server.post('/updateRow', async (req, res) => {
+    try {
+      const { spreadsheetId, sheetName = 'list', rowNum, row } = req.body ?? {};
+      const normalizedSpreadsheetId = validateSpreadsheetKey(spreadsheetId);
+      const rn = Number(rowNum);
+      if (!normalizedSpreadsheetId) throw new Error('spreadsheetId is invalid');
+      if (!sheetName) throw new Error('sheetName is required');
+      if (!Number.isFinite(rn) || rn < 2) throw new Error('rowNum must be >= 2');
+      if (!row || typeof row !== 'object') throw new Error('row is required');
+
+      const auth = new GoogleAuth({
+        keyFile: keyPath,
+        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+      });
+      const client = await auth.getClient();
+      google.options({ auth: client });
+
+      const headerRes = await sheets.spreadsheets.values.get({
+        spreadsheetId: normalizedSpreadsheetId,
+        range: `${sheetName}!1:1`,
+      });
+      const headers = (headerRes.data.values?.[0] ?? []).filter(Boolean);
+      if (!headers.length) throw new Error(`No headers found in sheet: ${sheetName}`);
+
+      const values = mapRowToHeaderOrder(headers, row);
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: normalizedSpreadsheetId,
+        range: `${sheetName}!A${rn}:AA${rn}`,
+        valueInputOption: 'USER_ENTERED',
+        resource: { values: [values] },
+      });
+
+      res.json({ success: true, rowNum: rn });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err?.message || String(err) });
+    }
+  });
+
+  server.post('/deleteRow', async (req, res) => {
+    try {
+      const { spreadsheetId, sheetName = 'list', rowNum } = req.body ?? {};
+      const normalizedSpreadsheetId = validateSpreadsheetKey(spreadsheetId);
+      const rn = Number(rowNum);
+      if (!normalizedSpreadsheetId) throw new Error('spreadsheetId is invalid');
+      if (!sheetName) throw new Error('sheetName is required');
+      if (!Number.isFinite(rn) || rn < 2) throw new Error('rowNum must be >= 2');
+
+      const auth = new GoogleAuth({
+        keyFile: keyPath,
+        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+      });
+      const client = await auth.getClient();
+      google.options({ auth: client });
+
+      const headerRes = await sheets.spreadsheets.values.get({
+        spreadsheetId: normalizedSpreadsheetId,
+        range: `${sheetName}!1:1`,
+      });
+      const headers = (headerRes.data.values?.[0] ?? []).filter(Boolean);
+      if (!headers.length) throw new Error(`No headers found in sheet: ${sheetName}`);
+
+      // Create empty row but set status to a non-empty value so it won't be queued again.
+      const values = headers.map(() => '');
+      const statusIdx = headers.findIndex((h) => normalizeHeaderKey(h) === 'status');
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: normalizedSpreadsheetId,
+        range: `${sheetName}!A${rn}:AA${rn}`,
+        valueInputOption: 'USER_ENTERED',
+        resource: { values: [values] },
+      });
+
+      res.json({ success: true, rowNum: rn });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err?.message || String(err) });
+    }
+  });
+
+  server.get('/zipSearch', async (req, res) => {
+    try {
+      const zip = String(req.query?.zipcode ?? '').replace(/-/g, '').trim();
+      if (!/^\d{7}$/.test(zip)) {
+        res.status(400).json({ success: false, error: 'Invalid zipcode. Must be 7 digits.' });
+        return;
+      }
+
+      const response = await axios.get('https://zipcloud.ibsnet.co.jp/api/search', {
+        params: { zipcode: zip },
+        timeout: 15000,
+      });
+
+      // Zipcloud returns { results: [...] } or { message: '...' }
+      res.json(response.data);
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: err?.message || String(err),
+      });
     }
   });
 
@@ -382,7 +642,7 @@ async function createBrowserSession(queueItem) {
 
 // ======================= Sheets =======================
 function getCandidateTargets() {
-  return [{ id: spreadsheetKey1, tab: 'list' }];
+  return [{ id: spreadsheetKey1, tab: 'list' }].filter(t => Boolean(t.id));
 }
 
 async function getRowsFromSpreadsheet(id, tab) {
@@ -392,7 +652,7 @@ async function getRowsFromSpreadsheet(id, tab) {
 
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: id,
-    range: `${tab}!A:R`
+    range: `${tab}!A:AA`
   });
 
   const rows = res.data.values || [];
@@ -467,10 +727,23 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
   const currentSheetName = sessionInfo.sheetName;
   const spreadsheetInfo = sessionInfo.rowData;
   const rowNum = sessionInfo.rowNum;
+ console.log(spreadsheetInfo, 'spreadsheetInfo');
+  // Prefer per-row settings from the spreadsheet. Fall back to global args.
+  const effectiveModelOption = spreadsheetInfo?.modelOption ?? modelOption;
+  const effectiveColorOption = spreadsheetInfo?.colorOption ?? colorOption;
+  const effectiveStorageOption = spreadsheetInfo?.storageOption ?? storageOption;
+  const effectiveQuantityOption = spreadsheetInfo?.quantityOption ?? quantityOption;
+  const effectiveDeliveryOption = spreadsheetInfo?.deliveryOption ?? deliveryOption;
+  const effectiveStoreOption = spreadsheetInfo?.storeOption ?? storeOption;
+  const effectiveZipOption = spreadsheetInfo?.zipCode ?? zipOption;
+  const effectivePayOption = spreadsheetInfo?.payOption ?? payOption;
+  const effectiveConfirmOption = spreadsheetInfo?.confirmOption ?? confirmOption;
+  const effectiveStoreMonitoringInterval =
+    spreadsheetInfo?.storeMonitoringInterval ?? storeMonitoringInterval;
   const sessionUrl =
     joinUrl(
       safeStr(findRowUrl(data)) || url,
-      safeStr(findRowIphoneId(data)),
+      safeStr(spreadsheetInfo?.iphone_id),
     );
   console.log(sessionUrl, 'SessionUrl')
 
@@ -511,8 +784,8 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
     const maxRetries = 3;
     for (let i = 0; i < maxRetries; i++) {
       // モデル選択
-      const colorSelector = `.rf-bfe-dimension-dimensioncolor > fieldset > ul > li:nth-child(${1 + Number(colorOption)}) > label`;
-      if (modelOption != 'skip') {
+      const colorSelector = `.rf-bfe-dimension-dimensioncolor > fieldset > ul > li:nth-child(${1 + Number(effectiveColorOption)}) > label`;
+      if (effectiveModelOption != 'skip') {
         const is_model = await page.evaluate(() => {
           const all = document.querySelectorAll('[name="dimensionScreensize"]');
           return all && all.length > 0 ? 'has_model' : 'skip';
@@ -522,7 +795,8 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
           const screenSelector = '[name="dimensionScreensize"]';
           await waitForClickableElement(screenSelector, sessionId);
           await page.waitForTimeout(300);
-          await directClick(screenSelector, Number(modelOption), sessionId, page);
+          console.log(effectiveModelOption, 'effectiveModelOption')
+          await directClick(screenSelector, Number(effectiveModelOption), sessionId, page);
         }
       }
 
@@ -550,7 +824,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
 
 
       // Apple Store在庫監視モード
-      if (deliveryOption == 'appleStore1' && i == 0) {
+      if (effectiveDeliveryOption == 'appleStore1' && i == 0) {
         await page.setRequestInterception(true);
         let targetUrl;
         let itemNumber;
@@ -559,7 +833,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
           if (interceptedRequest.url().includes('fulfillment-messages')) {
             let parsedUrl = new URL(interceptedRequest.url());
             let params = new URLSearchParams(parsedUrl.search);
-            params.set('store', storeOption);
+            params.set('store', effectiveStoreOption);
             itemNumber = params.get('parts.0');
             targetUrl = `${parsedUrl.origin}${parsedUrl.pathname}?${params.toString()}`;
             interceptedRequest.continue({ url: targetUrl });
@@ -568,11 +842,11 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
           }
         };
         page.on('request', interceptedRequestHandler);
-        await directClick(capacitySelector, Number(storageOption), sessionId, page);
+        await directClick(capacitySelector, Number(effectiveStorageOption), sessionId, page);
 
         while (runningStatus) {
           mainWindow.webContents.send('log', { sessionId, message: `Checking ${itemNumber} stock...` });
-          const spreadsheetStock = await checkStockBySpreadsheet(itemNumber, storeOption);
+          const spreadsheetStock = await checkStockBySpreadsheet(itemNumber, effectiveStoreOption);
           if (!spreadsheetStock) {
             const response = await axios.get(targetUrl);
             const data = response.data;
@@ -580,7 +854,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
             const pickupDisplay = data.body.content.pickupMessage.stores[0].partsAvailability[firstKey].pickupDisplay;
 
             if (pickupDisplay == 'unavailable') {
-              await page.waitForTimeout(storeMonitoringInterval * 1000);
+              await page.waitForTimeout(effectiveStoreMonitoringInterval * 1000);
             } else {
               mainWindow.webContents.send('log', { sessionId, message: `${firstKey} is in stock!!` });
               break;
@@ -589,7 +863,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
             mainWindow.webContents.send('log', { sessionId, message: `${itemNumber} is in stock!!` });
             break;
           } else {
-            await page.waitForTimeout(storeMonitoringInterval * 1000);
+            await page.waitForTimeout(effectiveStoreMonitoringInterval * 1000);
           }
         }
 
@@ -598,7 +872,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
         await page.goto(sessionUrl, { waitUntil: 'networkidle0' });
       } else {
         await page.waitForSelector('#noTradeIn');
-        await directClick(capacitySelector, Number(storageOption), sessionId, page);
+        await directClick(capacitySelector, Number(effectiveStorageOption), sessionId, page);
       }
       const isAppleCareSelected = async (selector) => {
         try {
@@ -692,7 +966,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
       try {
         await page.waitForTimeout(quantitySelector, { visible: true });
         await waitForClickableElement(quantitySelector, sessionId);
-        await page.select(quantitySelector, quantityOption);
+        await page.select(quantitySelector, effectiveQuantityOption);
       } catch (error) {
         console.log(`数量変更失敗: ${error}`);
       }
@@ -715,7 +989,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
       await directClick(guestLoginSelector, 0, sessionId, page);
 
       // ======================= 配送 or 店舗受取 =======================
-      if (deliveryOption == 'delivery') {
+      if (effectiveDeliveryOption == 'delivery') {
         const locationEditSelector = '.rs-edit-location-button';
         await waitForClickableElement(locationEditSelector, sessionId);
         await page.waitForTimeout(300);
@@ -754,7 +1028,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
         await page.type('[id="checkout.shipping.addressContactEmail.address.emailAddress"]', safeStr(spreadsheetInfo?.emailAddress));
         await page.type('[id="checkout.shipping.addressContactPhone.address.mobilePhone"]', safeStr(spreadsheetInfo?.mobilePhone));
 
-      } else if (deliveryOption == 'convenienceStore' || deliveryOption == 'appleStore') {
+      } else if (effectiveDeliveryOption == 'convenienceStore' || effectiveDeliveryOption == 'appleStore') {
         const convenienceStoreSelector = '.rc-segmented-control-item:nth-child(2) .rc-segmented-control-button';
         await page.waitForTimeout(convenienceStoreSelector, { visible: true });
         await waitForClickableElement(convenienceStoreSelector, sessionId);
@@ -772,19 +1046,19 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
         await page.waitForTimeout(300);
 
         await page.$eval(storeLocatorSearchInputSelector, el => el.value = '');
-        await page.type(storeLocatorSearchInputSelector, safeStr(zipOption));
+        await page.type(storeLocatorSearchInputSelector, safeStr(effectiveZipOption));
 
         const locationEditButtonSelector = '[id="checkout.fulfillment.pickupTab.pickup.storeLocator.search"]';
         await page.waitForTimeout(locationEditButtonSelector, { visible: true });
         await waitForClickableElement(locationEditButtonSelector, sessionId);
         await directClick(locationEditButtonSelector, 0, sessionId, page);
 
-        if (deliveryOption == 'convenienceStore') {
+        if (effectiveDeliveryOption == 'convenienceStore') {
           const availableConvenienceStoreSelector = '.rt-storelocator-store-marker-pup';
           await page.waitForSelector(availableConvenienceStoreSelector);
           await directClick(availableConvenienceStoreSelector, 0, sessionId, page);
-        } else if (deliveryOption == 'appleStore') {
-          const availableAppleStoreSelector = `input[value="${storeOption}"]`;
+        } else if (effectiveDeliveryOption == 'appleStore') {
+          const availableAppleStoreSelector = `input[value="${effectiveStoreOption}"]`;
           await page.waitForSelector(availableAppleStoreSelector);
           await directClick(availableAppleStoreSelector, 0, sessionId, page);
         }
@@ -803,9 +1077,10 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
 
       updateSessionState(sessionId, {
         progress: 75,
-        step: deliveryOption === 'delivery' ? 'input_shipping' : 'input_pickup',
+        step:
+          effectiveDeliveryOption === 'delivery' ? 'input_shipping' : 'input_pickup',
         messageJa:
-          deliveryOption === 'delivery'
+          effectiveDeliveryOption === 'delivery'
             ? '配送先住所を入力中'
             : '受取情報を入力中',
       });
@@ -816,7 +1091,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
       await page.waitForTimeout(300);
       await directClick(checkoutContinueSelector, 0, sessionId, page);
 
-      if (payOption == 'creditcard') {
+      if (effectivePayOption == 'creditcard') {
         const creditSelector = '[id="checkout.billing.billingoptions.credit"]';
         const cardNumber = spreadsheetInfo?.cardNumber;
         await waitForClickableElement(creditSelector, sessionId);
@@ -832,7 +1107,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
         await page.type('[id="checkout.billing.billingOptions.selectedBillingOptions.creditCard.cardInputs.cardInput-0.expiration"]', safeStr(spreadsheetInfo?.expiration));
         await page.type('[id="checkout.billing.billingOptions.selectedBillingOptions.creditCard.cardInputs.cardInput-0.securityCode"]', safeStr(spreadsheetInfo?.securityCode));
 
-      } else if (payOption == 'bank') {
+      } else if (effectivePayOption == 'bank') {
         const bankSelector = '[id="checkout.billing.billingoptions.apple_pay"]';
         await waitForClickableElement(bankSelector, sessionId);
         await page.waitForTimeout(300);
@@ -846,8 +1121,8 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
       });
 
       // ======================= 請求先住所（受取の場合のみ） =======================
-      if (deliveryOption == 'convenienceStore' || deliveryOption == 'appleStore') {
-        if (payOption == 'creditcard') {
+      if (effectiveDeliveryOption == 'convenienceStore' || effectiveDeliveryOption == 'appleStore') {
+        if (effectivePayOption == 'creditcard') {
           await page.waitForSelector('[id="checkout.billing.billingOptions.selectedBillingOptions.creditCard.billingAddress.address.lastName"]');
           await page.type('[id="checkout.billing.billingOptions.selectedBillingOptions.creditCard.billingAddress.address.lastName"]', safeStr(spreadsheetInfo?.lastName));
           await page.type('[id="checkout.billing.billingOptions.selectedBillingOptions.creditCard.billingAddress.address.firstName"]', safeStr(spreadsheetInfo?.firstName));
@@ -857,7 +1132,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
           await page.type('[id="checkout.billing.billingOptions.selectedBillingOptions.creditCard.billingAddress.address.city"]', safeStr(spreadsheetInfo?.city));
           await page.type('[id="checkout.billing.billingOptions.selectedBillingOptions.creditCard.billingAddress.address.street"]', safeStr(spreadsheetInfo?.street));
           await page.type('[id="checkout.billing.billingOptions.selectedBillingOptions.creditCard.billingAddress.address.street2"]', safeStr(spreadsheetInfo?.street2));
-        } else if (payOption == 'bank') {
+        } else if (effectivePayOption == 'bank') {
           await page.waitForSelector('[id="checkout.billing.billingOptions.selectedBillingOptions.wireTransfer.billingAddress.address.lastName"]');
           await page.type('[id="checkout.billing.billingOptions.selectedBillingOptions.wireTransfer.billingAddress.address.lastName"]', safeStr(spreadsheetInfo?.lastName));
           await page.type('[id="checkout.billing.billingOptions.selectedBillingOptions.wireTransfer.billingAddress.address.firstName"]', safeStr(spreadsheetInfo?.firstName));
@@ -876,7 +1151,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
       await page.waitForTimeout(300);
       await directClick(checkoutContinue2Selector, 0, sessionId, page);
       page.waitForTimeout(10000);
-      if (confirmOption == 'true') {
+      if (effectiveConfirmOption == 'true') {
         await page.waitForSelector('.rs-review-summary');
         const confirmSelector = '#rs-checkout-continue-button-bottom';
         await waitForClickableElement(confirmSelector, sessionId);
