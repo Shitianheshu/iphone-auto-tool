@@ -738,7 +738,25 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
   const effectiveQuantityOption = spreadsheetInfo?.quantityOption ?? quantityOption;
   const effectiveDeliveryOption = spreadsheetInfo?.deliveryOption ?? deliveryOption;
   const effectiveStoreOption = spreadsheetInfo?.storeOption ?? storeOption;
-  const effectiveZipOption = spreadsheetInfo?.zipCode ?? zipOption;
+  function normalizeZipCodeForStoreLocator(input) {
+    if (input == null) return '';
+    const first = Array.isArray(input) ? input[0] : input;
+    const s = String(first).trim();
+    if (!s) return '';
+
+    // Handle common multi-value formats like "222,333" / "222 333" / "222\n333".
+    const token = s.split(/[\s,;]+/).filter(Boolean)[0] || s;
+
+    // Keep digits only; supports inputs like "123-4567".
+    const digits = token.replace(/-/g, '').replace(/\D/g, '');
+    if (!digits) return '';
+
+    // JP postal codes are typically 7 digits; cap just in case someone provided multiple digits accidentally.
+    return digits.length > 7 ? digits.slice(0, 7) : digits;
+  }
+
+  const effectiveZipOptionRaw = spreadsheetInfo?.zipCode ?? zipOption;
+  const effectiveZipOption = normalizeZipCodeForStoreLocator(effectiveZipOptionRaw);
   const effectivePayOption = spreadsheetInfo?.payOption ?? payOption;
   const effectiveConfirmOption = spreadsheetInfo?.confirmOption ?? confirmOption;
   const effectiveStoreMonitoringInterval =
@@ -1049,8 +1067,8 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
 
         await page.waitForSelector(storeLocatorSearchInputSelector, { timeout: 10000 });
         await page.$eval(storeLocatorSearchInputSelector, el => el.value = '');
-        console.log(safeStr(effectiveZipOption), 'effectiveZipOption');
-        await page.type(storeLocatorSearchInputSelector, safeStr(effectiveZipOption), { delay: 100 });
+        console.log({ effectiveZipOptionRaw, effectiveZipOption }, 'effectiveZipOption');
+        await page.type(storeLocatorSearchInputSelector, effectiveZipOption, { delay: 100 });
 
         const locationEditButtonSelector = '[id="checkout.fulfillment.pickupTab.pickup.storeLocator.search"]';
         await page.waitForTimeout(locationEditButtonSelector, { visible: true });
