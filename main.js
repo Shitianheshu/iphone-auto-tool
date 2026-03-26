@@ -204,7 +204,8 @@ async function appendRowsToSpreadsheet({ spreadsheetId, sheetName, rows }) {
   const appendRes = await sheets.spreadsheets.values.append({
     spreadsheetId: normalizedSpreadsheetId,
     range: `${sheetName}!A:AA`,
-    valueInputOption: 'USER_ENTERED',
+    // RAW preserves leading zeros for phone/card numbers
+    valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
     resource: { values },
   });
@@ -325,7 +326,8 @@ function startApiServer() {
       await sheets.spreadsheets.values.update({
         spreadsheetId: normalizedSpreadsheetId,
         range: `${sheetName}!A${rn}:AA${rn}`,
-        valueInputOption: 'USER_ENTERED',
+        // RAW preserves leading zeros for phone/card numbers
+        valueInputOption: 'RAW',
         resource: { values: [values] },
       });
 
@@ -365,7 +367,8 @@ function startApiServer() {
       await sheets.spreadsheets.values.update({
         spreadsheetId: normalizedSpreadsheetId,
         range: `${sheetName}!A${rn}:AA${rn}`,
-        valueInputOption: 'USER_ENTERED',
+        // RAW preserves leading zeros for phone/card numbers
+        valueInputOption: 'RAW',
         resource: { values: [values] },
       });
 
@@ -1102,7 +1105,10 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
         const cardNumberSelector = '[id="checkout.billing.billingOptions.selectedBillingOptions.creditCard.cardInputs.cardInput-0.cardNumber"]';
         await waitForClickableElement(cardNumberSelector, sessionId);
         console.log(cardNumber, 'cardNumber');
-        await page.type(cardNumberSelector, cardNumber, { delay: 100 });
+        // Card number may be stored in formatted style (e.g., "1234 5678 ...").
+        // Apple input expects digits only.
+        const cardDigits = safeStr(cardNumber).replace(/\D/g, '');
+        await page.type(cardNumberSelector, cardDigits, { delay: 100 });
         await page.waitForTimeout(500);
         await page.type('[id="checkout.billing.billingOptions.selectedBillingOptions.creditCard.cardInputs.cardInput-0.expiration"]', safeStr(spreadsheetInfo?.expiration));
         await page.type('[id="checkout.billing.billingOptions.selectedBillingOptions.creditCard.cardInputs.cardInput-0.securityCode"]', safeStr(spreadsheetInfo?.securityCode));
