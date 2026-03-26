@@ -1049,7 +1049,8 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
 
         await page.waitForSelector(storeLocatorSearchInputSelector, { timeout: 10000 });
         await page.$eval(storeLocatorSearchInputSelector, el => el.value = '');
-        await page.type(storeLocatorSearchInputSelector, safeStr(effectiveZipOption));
+        console.log(safeStr(effectiveZipOption), 'effectiveZipOption');
+        await page.type(storeLocatorSearchInputSelector, safeStr(effectiveZipOption), { delay: 100 });
 
         const locationEditButtonSelector = '[id="checkout.fulfillment.pickupTab.pickup.storeLocator.search"]';
         await page.waitForTimeout(locationEditButtonSelector, { visible: true });
