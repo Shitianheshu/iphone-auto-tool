@@ -1250,7 +1250,7 @@ async function directClick(selector, index = 0, sessionId, page) {
 }
 
 
-async function waitForClickableElement(selector, sessionId, pageOrFrame = null, timeout = 60000) {
+async function waitForClickableElement(selector, sessionId, pageOrFrame = null, timeout = 9000000) {
   const page = pageOrFrame || activeSessions.get(sessionId).page;
   console.log(`[${sessionId}] waiting for ${selector} to be clickable`);
 
