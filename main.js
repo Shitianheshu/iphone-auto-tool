@@ -242,10 +242,10 @@ function startApiServer() {
 
   server.post('/start', async (req, res) => {
     try {
-      
+
 
       const args = req.body;
-      
+
 
       runningStatus = true;
 
@@ -730,7 +730,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
   const currentSheetName = sessionInfo.sheetName;
   const spreadsheetInfo = sessionInfo.rowData;
   const rowNum = sessionInfo.rowNum;
- console.log(spreadsheetInfo, 'spreadsheetInfo');
+  console.log(spreadsheetInfo, 'spreadsheetInfo');
   // Prefer per-row settings from the spreadsheet. Fall back to global args.
   const effectiveModelOption = spreadsheetInfo?.modelOption ?? modelOption;
   const effectiveColorOption = spreadsheetInfo?.colorOption ?? colorOption;
@@ -738,7 +738,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
   const effectiveQuantityOption = spreadsheetInfo?.quantityOption ?? quantityOption;
   const effectiveDeliveryOption = spreadsheetInfo?.deliveryOption ?? deliveryOption;
   const effectiveStoreOption = spreadsheetInfo?.storeOption ?? storeOption;
- 
+
 
   const effectiveZipOption = spreadsheetInfo?.zipCode;
   const effectivePayOption = spreadsheetInfo?.payOption ?? payOption;
@@ -1046,13 +1046,10 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
         await directClick(locationEditSelector, 0, sessionId, page);
 
         const storeLocatorSearchInputSelector = '[id="checkout.fulfillment.pickupTab.pickup.storeLocator.searchInput"]';
-        await page.evaluate((selector, value) => {
-          const input = document.querySelector(selector);
-          input.focus();
-          input.value = value;
-        
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-        }, storeLocatorSearchInputSelector, safeStr(spreadsheetInfo?.zipCode));
+        await page.click(storeLocatorSearchInputSelector, { clickCount: 3 });
+        await page.keyboard.press('Backspace');
+        await page.type(storeLocatorSearchInputSelector, safeStr(spreadsheetInfo?.zipCode), { delay: 50 });
+        await page.keyboard.press('Enter');;
 
         const locationEditButtonSelector = '[id="checkout.fulfillment.pickupTab.pickup.storeLocator.search"]';
         await page.waitForTimeout(locationEditButtonSelector, { visible: true });
