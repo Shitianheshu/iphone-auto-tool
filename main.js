@@ -1187,7 +1187,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
   } catch (error) {
     mainWindow.webContents.send('status', { sessionId, status: '失敗' });
     mainWindow.webContents.send('log', { sessionId, message: `Error: ${error.message}` });
-
+    console.log(error.message, 'check error');
     // エラー時は行をアンロック
     try {
       await unLockToSpreadsheet(rowNum, currentSpreadsheetId, currentSheetName);
