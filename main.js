@@ -738,8 +738,9 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
   const effectiveQuantityOption = spreadsheetInfo?.quantityOption ?? quantityOption;
   const effectiveDeliveryOption = spreadsheetInfo?.deliveryOption ?? deliveryOption;
   const effectiveStoreOption = spreadsheetInfo?.storeOption ?? storeOption;
+ 
 
-  const effectiveZipOption =  spreadsheetInfo?.zipCode ?? zipOption;
+  const effectiveZipOption = spreadsheetInfo?.zipCode;
   const effectivePayOption = spreadsheetInfo?.payOption ?? payOption;
   const effectiveConfirmOption = spreadsheetInfo?.confirmOption ?? confirmOption;
   const effectiveStoreMonitoringInterval =
@@ -1002,7 +1003,7 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
         const postalSelector = '[id="checkout.fulfillment.deliveryTab.delivery.deliveryLocation.address.deliveryWarmingSubLayout.postalCode"]';
         await page.waitForSelector(postalSelector, { timeout: 10000 });
         await page.$eval(postalSelector, el => el.value = '');
-        await page.type(postalSelector, spreadsheetInfo?.postalCode);
+        await page.type(postalSelector, safeStr(spreadsheetInfo?.postalCode));
 
         await page.$eval('[id="checkout.fulfillment.deliveryTab.delivery.deliveryLocation.address.deliveryWarmingSubLayout.postalCode"]', el => el.value = '');
         await page.type('[id="checkout.fulfillment.deliveryTab.delivery.deliveryLocation.address.deliveryWarmingSubLayout.postalCode"]', safeStr(spreadsheetInfo?.postalCode));
@@ -1049,9 +1050,8 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
         await waitForClickableElement(storeLocatorSearchInputSelector, sessionId);
 
         await page.waitForSelector(storeLocatorSearchInputSelector, { timeout: 10000 });
-        // Keyboard "Ctrl/⌘ + A" input replaces existing value even for controlled inputs.
-        console.log({ sessionId, effectiveZipOptionRaw, effectiveZipOption }, 'storeLocatorZip');
-        await typeIntoInputByKeyboard(storeLocatorSearchInputSelector, effectiveZipOption, sessionId, page);
+        await page.$eval(storeLocatorSearchInputSelector, el => el.value = '');
+        await page.type(storeLocatorSearchInputSelector, safeStr(effectiveZipOption));
 
         const locationEditButtonSelector = '[id="checkout.fulfillment.pickupTab.pickup.storeLocator.search"]';
         await page.waitForTimeout(locationEditButtonSelector, { visible: true });
@@ -1273,25 +1273,6 @@ async function waitForClickableElement(selector, sessionId, pageOrFrame = null, 
   // ensure it’s scrolled into view
   await page.$eval(selector, el => el.scrollIntoView({ behavior: 'auto', block: 'center' }));
   await page.waitForTimeout(300); // give JS time to attach listeners
-}
-
-async function typeIntoInputByKeyboard(selector, value, sessionId, pageOrFrame = null, typeDelay = 80) {
-  const page = pageOrFrame || activeSessions.get(sessionId).page;
-  const v = value == null ? '' : String(value);
-
-  await waitForClickableElement(selector, sessionId, page, 10000);
-
-  // Click to focus then select-all to avoid "append" with controlled inputs.
-  await directClick(selector, 0, sessionId, page);
-
-  const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
-  await page.keyboard.down(modifier);
-  await page.keyboard.press('KeyA');
-  await page.keyboard.up(modifier);
-  await page.waitForTimeout(50);
-
-  await page.keyboard.type(v, { delay: typeDelay });
-  await page.waitForTimeout(150);
 }
 async function safePageEvaluate(fn, ...args) {
   const page = activeSessions.get(args[2]).page
