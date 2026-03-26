@@ -1046,9 +1046,13 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
         await directClick(locationEditSelector, 0, sessionId, page);
 
         const storeLocatorSearchInputSelector = '[id="checkout.fulfillment.pickupTab.pickup.storeLocator.searchInput"]';
-        await page.waitForSelector(storeLocatorSearchInputSelector);
-        await page.$eval(storeLocatorSearchInputSelector, el => el.value = '');
-        await page.type(storeLocatorSearchInputSelector, safeStr(spreadsheetInfo?.zipCode));
+        await page.evaluate((selector, value) => {
+          const input = document.querySelector(selector);
+          input.focus();
+          input.value = value;
+        
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        }, storeLocatorSearchInputSelector, safeStr(spreadsheetInfo?.zipCode));
 
         const locationEditButtonSelector = '[id="checkout.fulfillment.pickupTab.pickup.storeLocator.search"]';
         await page.waitForTimeout(locationEditButtonSelector, { visible: true });
