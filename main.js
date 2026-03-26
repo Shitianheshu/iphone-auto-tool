@@ -1041,11 +1041,9 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
         await page.waitForTimeout(1000);
 
         const locationEditSelector = '.rs-edit-location-button';
-        if (await isExist(locationEditSelector)) {
-          await waitForClickableElement(locationEditSelector, sessionId);
-          await page.waitForTimeout(300);
-          await directClick(locationEditSelector, 0, sessionId, page);
-        }
+        await waitForClickableElement(locationEditSelector, sessionId);
+        await page.waitForTimeout(300);
+        await directClick(locationEditSelector, 0, sessionId, page);
 
         const storeLocatorSearchInputSelector = '[id="checkout.fulfillment.pickupTab.pickup.storeLocator.searchInput"]';
         await page.click(storeLocatorSearchInputSelector, { clickCount: 3 });
