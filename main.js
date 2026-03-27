@@ -1040,7 +1040,9 @@ async function scrapeWebsite(sessionId, targetWindow, data) {
         await directClick(convenienceStoreSelector, 0, sessionId, page);
         await page.waitForTimeout(1000);
           
-         const locationButton = await page.$(locationEditSelector);
+
+        const locationEditSelector = '.rs-edit-location-button';
+        const locationButton = await page.$(locationEditSelector);
 
         if (locationButton) {
           await waitForClickableElement(locationEditSelector, sessionId);
